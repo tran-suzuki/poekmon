@@ -8,7 +8,7 @@ interface CameraCaptureProps {
 const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, isProcessing }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
@@ -18,7 +18,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, isProcessing }
           video: { facingMode: 'environment' },
           audio: false 
         });
-        setStream(mediaStream);
+        streamRef.current = mediaStream;
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
         }
@@ -31,18 +31,27 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, isProcessing }
     startCamera();
 
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Resume video when processing finishes (reset to live feed)
+  useEffect(() => {
+    if (!isProcessing && videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.play().catch(e => console.log("Resume error:", e));
+    }
+  }, [isProcessing]);
 
   const handleCapture = () => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       
+      // Freeze the video frame
+      video.pause();
+
       // Set canvas size to match video
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -70,27 +79,33 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, isProcessing }
         autoPlay 
         playsInline 
         muted 
-        className={`w-full h-full object-cover ${isProcessing ? 'opacity-50 filter grayscale' : ''}`}
+        className={`w-full h-full object-cover transition-all duration-300 ${isProcessing ? 'filter grayscale contrast-125' : ''}`}
       />
       
-      {/* Scanning Overlay Animation */}
+      {/* Scanning Overlay Animation (Only when live) */}
       {!isProcessing && (
         <div className="absolute inset-0 pointer-events-none opacity-30 bg-[linear-gradient(transparent_50%,rgba(0,255,0,0.25)_50%)] bg-[length:100%_4px]"></div>
       )}
+
+      {/* Processing Overlay */}
+      {isProcessing && (
+        <div className="absolute inset-0 pointer-events-none bg-green-900/20 flex flex-col items-center justify-center">
+          <div className="w-full h-0.5 bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.8)] animate-pulse mb-2"></div>
+          <div className="text-green-400 font-mono text-sm tracking-widest animate-pulse bg-black/50 px-2">PROCESSING...</div>
+        </div>
+      )}
       
-      {/* Capture Button Overlay */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-        <button
-          onClick={handleCapture}
-          disabled={isProcessing}
-          className={`
-            w-16 h-16 rounded-full border-4 border-white flex items-center justify-center shadow-lg transition-all
-            ${isProcessing ? 'bg-gray-500 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-400 active:scale-95'}
-          `}
-        >
-          <div className="w-full h-full rounded-full opacity-50 animate-pulse bg-white"></div>
-        </button>
-      </div>
+      {/* Capture Button Overlay - Hide when processing */}
+      {!isProcessing && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+          <button
+            onClick={handleCapture}
+            className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center shadow-lg transition-all bg-blue-500 hover:bg-blue-400 active:scale-95"
+          >
+            <div className="w-full h-full rounded-full opacity-50 animate-pulse bg-white"></div>
+          </button>
+        </div>
+      )}
 
       <canvas ref={canvasRef} className="hidden" />
     </div>
