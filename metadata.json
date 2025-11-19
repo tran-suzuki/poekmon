@@ -1,0 +1,7 @@
+{
+  "name": "Human Pokedex (辛口)",
+  "description": "A sarcastic Pokedex that analyzes humans, determines their stats/moves, and insults them with an emotionless AI voice.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
