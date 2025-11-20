@@ -12,19 +12,23 @@ const PokedexList: React.FC<PokedexListProps> = ({ onSelect }) => {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    setEntries(getEntries());
+    const loadEntries = async () => {
+      const data = await getEntries();
+      setEntries(data);
+    };
+    loadEntries();
   }, []);
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (window.confirm('このデータを削除しますか？')) {
-      const updated = deleteEntry(id);
+      const updated = await deleteEntry(id);
       setEntries(updated);
     }
   };
 
-  const filtered = entries.filter(entry => 
-    entry.speciesName.includes(search) || 
+  const filtered = entries.filter(entry =>
+    entry.speciesName.includes(search) ||
     entry.types.some(t => t.includes(search)) ||
     entry.description.includes(search)
   );
@@ -36,9 +40,9 @@ const PokedexList: React.FC<PokedexListProps> = ({ onSelect }) => {
 
       {/* Search Bar */}
       <div className="relative z-20 mb-2 shrink-0">
-        <input 
-          type="text" 
-          placeholder="SEARCH..." 
+        <input
+          type="text"
+          placeholder="SEARCH..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-green-900/10 border border-green-800 rounded px-2 py-1 text-gray-900 placeholder-gray-600 focus:outline-none focus:bg-green-900/20 font-bold uppercase"
@@ -51,7 +55,7 @@ const PokedexList: React.FC<PokedexListProps> = ({ onSelect }) => {
           <div className="text-center text-gray-600 mt-10">NO DATA FOUND</div>
         ) : (
           filtered.map((entry) => (
-            <div 
+            <div
               key={entry.id}
               onClick={() => onSelect(entry)}
               className="flex items-center bg-green-800/5 border border-green-800/20 rounded p-2 hover:bg-green-800/20 cursor-pointer transition-colors group"
@@ -60,7 +64,7 @@ const PokedexList: React.FC<PokedexListProps> = ({ onSelect }) => {
               <div className="w-12 h-12 bg-black rounded overflow-hidden border border-green-900 shrink-0">
                 <img src={`data:image/jpeg;base64,${entry.imageBase64}`} alt="" className="w-full h-full object-cover opacity-80" />
               </div>
-              
+
               {/* Info */}
               <div className="ml-3 flex-1 min-w-0">
                 <div className="font-bold text-gray-900 truncate">{entry.speciesName}</div>
@@ -72,7 +76,7 @@ const PokedexList: React.FC<PokedexListProps> = ({ onSelect }) => {
               </div>
 
               {/* Delete Button */}
-              <button 
+              <button
                 onClick={(e) => handleDelete(e, entry.id)}
                 className="p-2 text-green-900 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-600"
               >
