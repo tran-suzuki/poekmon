@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { PokemonData } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 // 1. Analyze Image to get Pokemon Data
 export const analyzeHuman = async (base64Image: string): Promise<PokemonData> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   const prompt = `
   この写真を「人間ポケモン」として分析してください。
   非常に辛辣で皮肉屋なポケモン図鑑として振る舞ってください。
@@ -65,6 +65,8 @@ export const analyzeHuman = async (base64Image: string): Promise<PokemonData> =>
 
 // 2. Generate Speech from Description
 export const generatePokedexVoice = async (text: string): Promise<string | undefined> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   // Instruct the model to read it in a specific way
   const prompt = `以下のテキストを、感情を一切込めずに、機械的かつ冷淡に読み上げてください。\n\n"${text}"`;
 
@@ -76,7 +78,7 @@ export const generatePokedexVoice = async (text: string): Promise<string | undef
       speechConfig: {
         voiceConfig: {
           prebuiltVoiceConfig: { 
-            voiceName: 'Kore' // Kore is often deeper/stern. Alternatives: Puck, Charon.
+            voiceName: 'Fenrir' // Male voice
           },
         },
       },

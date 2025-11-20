@@ -1,17 +1,28 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 
 interface CameraCaptureProps {
   onCapture: (base64Image: string) => void;
   isProcessing: boolean;
+  previewImage?: string | null; // If provided, show this instead of camera
 }
 
-const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, isProcessing }) => {
+const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, isProcessing, previewImage }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
+    // Only start camera if we are NOT in preview mode
+    if (previewImage) {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      return;
+    }
+
     const startCamera = async () => {
       try {
         const mediaStream = await navigator.mediaDevices.getUserMedia({ 
@@ -35,14 +46,14 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, isProcessing }
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [previewImage]); // Re-run when previewImage changes
 
-  // Resume video when processing finishes (reset to live feed)
+  // Resume video when processing finishes (only if not in preview mode)
   useEffect(() => {
-    if (!isProcessing && videoRef.current && videoRef.current.srcObject) {
+    if (!previewImage && !isProcessing && videoRef.current && videoRef.current.srcObject) {
       videoRef.current.play().catch(e => console.log("Resume error:", e));
     }
-  }, [isProcessing]);
+  }, [isProcessing, previewImage]);
 
   const handleCapture = () => {
     if (videoRef.current && canvasRef.current) {
@@ -73,17 +84,24 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, isProcessing }
 
   return (
     <div className="relative w-full aspect-[4/3] bg-black rounded-lg border-4 border-gray-700 shadow-inner overflow-hidden group">
-      {/* Video Feed */}
-      <video 
-        ref={videoRef} 
-        autoPlay 
-        playsInline 
-        muted 
-        className={`w-full h-full object-cover transition-all duration-300 ${isProcessing ? 'filter grayscale contrast-125' : ''}`}
-      />
+      {previewImage ? (
+        <img 
+          src={`data:image/jpeg;base64,${previewImage}`} 
+          className="w-full h-full object-cover filter contrast-125"
+          alt="Stored subject"
+        />
+      ) : (
+        <video 
+          ref={videoRef} 
+          autoPlay 
+          playsInline 
+          muted 
+          className={`w-full h-full object-cover transition-all duration-300 ${isProcessing ? 'filter grayscale contrast-125' : ''}`}
+        />
+      )}
       
       {/* Scanning Overlay Animation (Only when live) */}
-      {!isProcessing && (
+      {!isProcessing && !previewImage && (
         <div className="absolute inset-0 pointer-events-none opacity-30 bg-[linear-gradient(transparent_50%,rgba(0,255,0,0.25)_50%)] bg-[length:100%_4px]"></div>
       )}
 
@@ -95,8 +113,8 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, isProcessing }
         </div>
       )}
       
-      {/* Capture Button Overlay - Hide when processing */}
-      {!isProcessing && (
+      {/* Capture Button Overlay - Hide when processing OR in preview mode */}
+      {!isProcessing && !previewImage && (
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
           <button
             onClick={handleCapture}

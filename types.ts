@@ -1,3 +1,4 @@
+
 export interface PokemonStats {
   hp: number;
   attack: number;
@@ -18,4 +19,10 @@ export interface PokemonData {
 export interface AnalysisResult {
   pokemonData: PokemonData;
   audioBase64?: string;
+}
+
+export interface SavedEntry extends PokemonData {
+  id: string;
+  timestamp: number;
+  imageBase64: string;
 }

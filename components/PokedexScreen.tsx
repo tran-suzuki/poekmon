@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { PokemonData } from '../types';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
@@ -5,6 +6,8 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } fro
 interface PokedexScreenProps {
   data: PokemonData | null;
   loading: boolean;
+  onPlayAudio?: () => void;
+  hasAudio?: boolean;
 }
 
 const StatRow = ({ label, value }: { label: string; value: number }) => (
@@ -20,7 +23,7 @@ const StatRow = ({ label, value }: { label: string; value: number }) => (
   </div>
 );
 
-const PokedexScreen: React.FC<PokedexScreenProps> = ({ data, loading }) => {
+const PokedexScreen: React.FC<PokedexScreenProps> = ({ data, loading, onPlayAudio, hasAudio }) => {
   if (loading) {
     return (
       <div className="w-full h-full bg-green-100 border-4 border-gray-600 rounded-lg p-4 flex flex-col items-center justify-center shadow-[inset_0_0_20px_rgba(0,0,0,0.2)]">
@@ -54,11 +57,11 @@ const PokedexScreen: React.FC<PokedexScreenProps> = ({ data, loading }) => {
   ];
 
   return (
-    <div className="w-full bg-[#98CB98] border-8 border-gray-700 rounded-lg p-2 shadow-[inset_0_0_20px_rgba(0,0,0,0.1)] font-mono relative overflow-hidden">
+    <div className="w-full h-full bg-[#98CB98] border-8 border-gray-700 rounded-lg p-2 shadow-[inset_0_0_20px_rgba(0,0,0,0.1)] font-mono relative overflow-hidden flex flex-col">
       {/* Scanlines effect */}
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 bg-[length:100%_4px,3px_100%]"></div>
 
-      <div className="relative z-20 text-gray-900 h-full overflow-y-auto pb-4">
+      <div className="relative z-20 text-gray-900 h-full overflow-y-auto pb-4 custom-scrollbar">
         
         {/* Header */}
         <div className="border-b-2 border-gray-800 pb-1 mb-2 flex justify-between items-end">
@@ -73,8 +76,21 @@ const PokedexScreen: React.FC<PokedexScreenProps> = ({ data, loading }) => {
         </div>
 
         {/* Description */}
-        <div className="bg-green-800/10 p-2 rounded mb-3 text-sm leading-snug italic border border-green-800/20">
-           "{data.description}"
+        <div className="bg-green-800/10 p-2 rounded mb-3 border border-green-800/20 relative group">
+           <div className="text-sm leading-snug italic pr-6">"{data.description}"</div>
+           
+           {/* Play Button in description box */}
+           {hasAudio && (
+             <button 
+               onClick={onPlayAudio}
+               className="absolute top-2 right-1 text-green-900 hover:text-green-700 transition-colors p-1 bg-green-800/20 rounded-full"
+               title="音声を再生"
+             >
+               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+               </svg>
+             </button>
+           )}
         </div>
 
         {/* Stats & Chart Layout */}

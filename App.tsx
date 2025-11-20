@@ -1,13 +1,19 @@
+
 import React, { useState, useRef } from 'react';
 import CameraCapture from './components/CameraCapture';
 import PokedexScreen from './components/PokedexScreen';
+import PokedexList from './components/PokedexList';
 import { analyzeHuman, generatePokedexVoice } from './services/geminiService';
 import { decode, decodeAudioData } from './utils/audioUtils';
-import { PokemonData } from './types';
+import { PokemonData, SavedEntry } from './types';
+import { saveEntry } from './utils/storage';
 
 const App: React.FC = () => {
   const [pokemonData, setPokemonData] = useState<PokemonData | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [currentAudio, setCurrentAudio] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'scan' | 'list'>('scan');
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   
   // Audio Context for playback
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -28,6 +34,7 @@ const App: React.FC = () => {
       
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
+      source.playbackRate.value = 1.5; // Set playback speed to 1.5x
       source.connect(ctx.destination);
       source.start(0);
 
@@ -41,16 +48,22 @@ const App: React.FC = () => {
     
     setIsProcessing(true);
     setPokemonData(null); // Reset display
+    setCurrentAudio(null);
+    setPreviewImage(null); // Clear preview if any
 
     try {
       // 1. Analyze Image
       const data = await analyzeHuman(base64Image);
       setPokemonData(data);
 
+      // Save to storage
+      saveEntry(data, base64Image);
+
       // 2. Generate Voice (Parallel or Sequential - Sequential is safer for flow)
       if (data.description) {
         const audioBase64 = await generatePokedexVoice(data.description);
         if (audioBase64) {
+          setCurrentAudio(audioBase64);
           await playAudio(audioBase64);
         }
       }
@@ -63,10 +76,37 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSelectFromList = (entry: SavedEntry) => {
+    setPokemonData(entry);
+    setPreviewImage(entry.imageBase64); // Show the saved image
+    setCurrentAudio(null); // Reset audio as we don't save it to save space
+    setViewMode('scan'); // Go back to main screen
+    
+    // Optionally regenerate audio or just let it be silent until requested
+    // If we want to auto-play:
+    // if (entry.description) generatePokedexVoice(entry.description).then(...)
+  };
+
+  const handleReplayAudio = () => {
+    if (currentAudio) {
+      playAudio(currentAudio);
+    } else if (pokemonData?.description) {
+       // If we don't have audio cached (e.g. from list view), generate it
+       setIsProcessing(true);
+       generatePokedexVoice(pokemonData.description).then(audio => {
+         setIsProcessing(false);
+         if(audio) {
+           setCurrentAudio(audio);
+           playAudio(audio);
+         }
+       });
+    }
+  };
+
   return (
-    <div className="min-h-screen w-full bg-red-700 flex items-center justify-center p-2 sm:p-4">
+    <div className="min-h-screen w-full bg-red-700 flex items-start justify-center p-4 py-8 overflow-y-auto">
       {/* Main Pokedex Body */}
-      <div className="w-full max-w-md bg-red-600 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-b-8 border-r-8 border-red-900 relative p-4 sm:p-6 flex flex-col gap-6">
+      <div className="w-full max-w-md bg-red-600 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-b-8 border-r-8 border-red-900 relative p-4 sm:p-6 flex flex-col gap-6 mb-8 shrink-0">
         
         {/* Top Decor */}
         <div className="absolute top-0 left-0 w-full h-16 flex items-center px-6 gap-4 z-10 pointer-events-none">
@@ -88,15 +128,31 @@ const App: React.FC = () => {
         {/* Container spacing for top decor */}
         <div className="mt-8"></div>
 
-        {/* Screen Container (Left/Top) - Camera */}
-        <div className="bg-gray-200 p-4 rounded-bl-[40px] rounded-lg shadow-inner border border-gray-400">
+        {/* Screen Container (Left/Top) - Camera or Image Preview */}
+        <div className="bg-gray-200 p-4 rounded-bl-[40px] rounded-lg shadow-inner border border-gray-400 shrink-0">
           <div className="flex justify-center mb-2 gap-2">
             <div className="w-2 h-2 bg-red-500 rounded-full"></div>
             <div className="w-2 h-2 bg-red-500 rounded-full"></div>
           </div>
-          <CameraCapture onCapture={handleCapture} isProcessing={isProcessing} />
+          
+          <CameraCapture 
+            onCapture={handleCapture} 
+            isProcessing={isProcessing} 
+            previewImage={previewImage}
+          />
+
           <div className="flex justify-between mt-2 px-2 items-center">
-             <div className="w-6 h-6 bg-red-600 rounded-full border border-red-800 animate-pulse"></div>
+             <button 
+               onClick={() => {
+                  setPreviewImage(null);
+                  setPokemonData(null);
+                  setViewMode('scan');
+               }}
+               className="w-6 h-6 bg-red-600 rounded-full border border-red-800 active:bg-red-700 shadow-sm flex items-center justify-center"
+               title="Reset Camera"
+             >
+               <span className="text-[10px] text-white font-bold">R</span>
+             </button>
              <div className="flex flex-col gap-[2px]">
                <div className="w-6 h-[2px] bg-gray-600"></div>
                <div className="w-6 h-[2px] bg-gray-600"></div>
@@ -105,13 +161,23 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Data Screen (Right/Bottom) */}
-        <div className="flex-1 min-h-[300px] flex flex-col">
-          <PokedexScreen data={pokemonData} loading={isProcessing} />
+        {/* Data Screen (Right/Bottom) - Toggles between Info and List */}
+        {/* Fixed height ensures internal scrolling works and doesn't expand the whole page improperly */}
+        <div className="h-[400px] flex flex-col shrink-0">
+          {viewMode === 'scan' ? (
+             <PokedexScreen 
+                data={pokemonData} 
+                loading={isProcessing} 
+                onPlayAudio={handleReplayAudio}
+                hasAudio={!!currentAudio || !!pokemonData} // Allow trying to generate audio if we have data
+              />
+          ) : (
+            <PokedexList onSelect={handleSelectFromList} />
+          )}
           
           {/* Controls Decor */}
-          <div className="mt-4 flex justify-between items-center px-2">
-             {/* D-Pad */}
+          <div className="mt-4 flex justify-between items-center px-2 shrink-0">
+             {/* D-Pad (Navigation) */}
              <div className="w-24 h-24 relative">
                 <div className="absolute top-0 left-1/3 w-1/3 h-full bg-gray-800 rounded shadow-md"></div>
                 <div className="absolute top-1/3 left-0 w-full h-1/3 bg-gray-800 rounded shadow-md"></div>
@@ -121,10 +187,37 @@ const App: React.FC = () => {
              {/* Action Buttons */}
              <div className="flex flex-col gap-2 items-end">
                 <div className="flex gap-2">
-                   <div className="w-10 h-2 bg-red-900 rounded-full shadow-inner"></div>
-                   <div className="w-10 h-2 bg-blue-900 rounded-full shadow-inner"></div>
+                   <button 
+                     onClick={() => setViewMode('list')}
+                     className={`w-12 h-3 rounded-full shadow-inner border text-[8px] flex items-center justify-center font-bold tracking-wider ${viewMode === 'list' ? 'bg-blue-900 border-blue-950 text-blue-200' : 'bg-red-900 border-red-950 text-red-200 hover:bg-red-800'}`}
+                   >
+                     LIST
+                   </button>
+                   <button 
+                      onClick={() => {
+                        setViewMode('scan');
+                        setPreviewImage(null); // Go back to camera
+                      }}
+                      className={`w-12 h-3 rounded-full shadow-inner border text-[8px] flex items-center justify-center font-bold tracking-wider ${viewMode === 'scan' ? 'bg-blue-900 border-blue-950 text-blue-200' : 'bg-red-900 border-red-950 text-red-200 hover:bg-red-800'}`}
+                   >
+                     SCAN
+                   </button>
                 </div>
-                <div className="w-8 h-8 bg-yellow-400 rounded-full border-2 border-yellow-600 shadow-lg"></div>
+                <button 
+                  onClick={handleReplayAudio}
+                  disabled={viewMode === 'list' || (!currentAudio && !pokemonData)}
+                  className={`w-8 h-8 rounded-full border-2 shadow-lg transition-all flex items-center justify-center ${
+                    (viewMode === 'scan' && (currentAudio || pokemonData))
+                    ? 'bg-yellow-400 border-yellow-600 hover:bg-yellow-300 active:scale-95 cursor-pointer' 
+                    : 'bg-yellow-600 border-yellow-800 cursor-not-allowed opacity-50'
+                  }`}
+                  aria-label="Replay Audio"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-yellow-900 opacity-75">
+                    <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06z" />
+                    <path d="M15.932 7.757a.75.75 0 011.061 0 6 6 0 010 8.486.75.75 0 01-1.06-1.061 4.5 4.5 0 000-6.364.75.75 0 010-1.06z" />
+                  </svg>
+                </button>
              </div>
           </div>
         </div>
